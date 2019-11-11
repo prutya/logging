@@ -3,6 +3,9 @@ version: "3.7"
 x-logging-fluent-bit: &logging-fluent-bit
   driver: fluentd
   options:
+    # NOTE: This option ensures that Docker will be able to start this
+    # container. Otherwise Docker won't see port 24224 on the host and never
+    # start the container
     fluentd-async-connect: "true"
     tag: "{{.Name}}.{{.ID}}"
 
@@ -11,21 +14,26 @@ volumes:
 
 networks:
   private: {}
-  public: {}
+  public-app: {}
+  public-kibana: {}
 
 services:
-  kibana:
-    image: kibana:7.4.2
+  app:
+    image: nginx:1.17.5-alpine
     logging: *logging-fluent-bit
     depends_on:
-      - elasticsearch
+      # NOTE: Looks like every container which sends its logs to fluent-bit
+      # (i.e. using x-logging-fluent-bit configuration chuck) must depend on
+      # fluent-bit in order to shut down BEFORE fluent-bit. Otherwise logs will
+      # buffer in docker and never get to fluent-bit, rendering the given
+      # container unkillable.
+      - fluent-bit
+    volumes:
+      - ./app:/usr/share/nginx/html
     ports:
-      - 5601:5601
+      - 8080:80
     networks:
-      - private
-      - public
-    labels:
-      - logging.efk.service=kibana
+      - public-app
 
   fluent-bit:
     image: fluent/fluent-bit:1.3.2
@@ -34,16 +42,13 @@ services:
     volumes:
       - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
     ports:
-      # This port should be closed for the outside world
+      # NOTE: This host port must be closed by firewall.
       - 24224:24224
     networks:
       - private
-    labels:
-      - logging.efk.service=fluent-bit
 
   elasticsearch:
     image: elasticsearch:7.4.2
-    logging: *logging-fluent-bit
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     networks:
@@ -51,3 +56,13 @@ services:
     environment:
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
       "discovery.type": "single-node"
+
+  kibana:
+    image: kibana:7.4.2
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5601:5601
+    networks:
+      - private
+      - public-kibana
