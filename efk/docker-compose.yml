@@ -1,5 +1,11 @@
 version: "3.7"
 
+x-logging-fluent-bit: &logging-fluent-bit
+  driver: fluentd
+  options:
+    fluentd-async-connect: "true"
+    tag: "{{.Name}}.{{.ID}}"
+
 volumes:
   elasticsearch-data: {}
 
@@ -10,11 +16,7 @@ networks:
 services:
   kibana:
     image: kibana:7.4.2
-    logging:
-      driver: fluentd
-      options:
-        fluentd-async-connect: "true"
-        tag: kibana
+    logging: *logging-fluent-bit
     depends_on:
       - elasticsearch
     ports:
@@ -41,11 +43,7 @@ services:
 
   elasticsearch:
     image: elasticsearch:7.4.2
-    logging:
-      driver: fluentd
-      options:
-        fluentd-async-connect: "true"
-        tag: elasticsearch
+    logging: *logging-fluent-bit
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     networks:
