@@ -1,0 +1,56 @@
+version: "3.7"
+
+networks:
+  public: {}
+  private: {}
+
+volumes:
+  influxdb-data: {}
+  chronograf-data: {}
+
+services:
+  chronograf:
+    image: chronograf:1.7.14-alpine
+    depends_on:
+      - influxdb
+    command: >
+      --reporting-disabled
+      --influxdb-url=http://influxdb:8086
+      --influxdb-username=chronograf
+      --influxdb-password=chronograf
+    volumes:
+      - chronograf-data:/var/lib/chronograf
+    ports:
+      - 8888:8888
+    networks:
+      - public
+      - private
+    labels:
+      - logging.tick.service=chronograf
+
+  telegraf:
+    image: telegraf:1.12.4-alpine
+    depends_on:
+      - influxdb
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - private
+    labels:
+      - logging.tick.service=telegraf
+
+  influxdb:
+    image: influxdb:1.5.4-alpine
+    environment:
+      INFLUXDB_DB: telegraf
+      INFLUXDB_WRITE_USER: telegraf
+      INFLUXDB_WRITE_USER_PASSWORD: telegraf
+      INFLUXDB_READ_USER: chronograf
+      INFLUXDB_READ_USER_PASSWORD: chronograf
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    networks:
+      - private
+    labels:
+      - logging.tick.service=influxdb
